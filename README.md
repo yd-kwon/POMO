@@ -3,6 +3,7 @@
 This repository provides a reference implementation of *POMO* and saved trained models as described in the paper:<br>
 > POMO: Policy Optimization with Multiple Optima for Reinforcement Learning<br>
 > accepted at NeurIPS 2020<br>
+http://arxiv.org/abs/2010.16011
 
 The code is written using Pytorch.<br>
 <br>
