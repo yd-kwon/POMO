@@ -1,33 +1,18 @@
 # POMO
 
-This repository provides a reference implementation of *POMO* and saved trained models as described in the paper:<br>
+### Files in "OLD_ipynb_ver" folders 
+
+They are original codes (2020) used in the paper<br>
 > POMO: Policy Optimization with Multiple Optima for Reinforcement Learning<br>
 > accepted at NeurIPS 2020<br>
 http://arxiv.org/abs/2010.16011
+https://proceedings.neurips.cc/paper/2020/hash/f231f2107df69eab0a3862d50018a9b2-Abstract.html 
 
-The code is written using Pytorch.<br>
-<br>
-
-### Basic Usage
-
-To test run, use an application (e.g. Jupyter Notebook) to open ipynb files.<br>
-*Train.ipynb* contains codes for POMO training, which produces a model that you can save using torch.save()<br>
-*Inference.ipynb* contains codes for inference using saved models.<br>
-Examples of trained models are also provided in the folder named "result".<br>
-
-You can edit *HYPER_PARAMS.py* to change the size of the problem or other hyper-parameters before training. <br>
-
-Three example problems are solved:<br>
-- Traveling Salesman Problem (TSP) <br>
-- Capacitated Vehicle Routing Problem (CVRP) <br>
-- 0-1 Knapsack Problem (KP) <br>
-
-<br>
-
-### Used Libraries
-torch==1.2.0<br>
-numpy==1.16.4<br>
-ipython==7.1.1<br>
-matplotlib==3.1.0<br>
-
+They are based on ipynb files and easier to play with interactively.
+ <br>
+ <br>
+ <br>
+### Files in "NEW_py_ver" folders 
+They are updated codes, newly structured in 2021. <br>
+They are based on py files, so that they can be run on servers more easily.
 
