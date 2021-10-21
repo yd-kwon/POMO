@@ -2,7 +2,7 @@
 
 ### Files in "OLD_ipynb_ver" folders 
 
-They are original codes (2020) used in the paper<br>
+They are the original codes (2020) used for the paper<br>
 > POMO: Policy Optimization with Multiple Optima for Reinforcement Learning<br>
 > accepted at NeurIPS 2020<br>
 http://arxiv.org/abs/2010.16011
@@ -13,6 +13,6 @@ They are based on ipynb files and easier to play with interactively.
  <br>
  <br>
 ### Files in "NEW_py_ver" folders 
-They are updated codes, newly structured in 2021. <br>
+They are the updated codes, newly structured in 2021. <br>
 They are based on py files, so that they can be run on servers more easily.
 
