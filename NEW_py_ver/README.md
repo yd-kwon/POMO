@@ -5,6 +5,14 @@ We provide codes for two CO (combinatorial optimization) problems:<br>
 - Capacitated Vehicle Routing Problem (CVRP) <br>
 
 
+### Changes from the old version
+
+Other than the re-organized structure, no major change has been made, so that the two versions should give roughly the same results.
+Some meaningful changes are:
+- Query token in the decoder does not contain "graph encoding" now, because this does not seem to make much difference. (But who knows?)
+- Normalization methods have changed, from BatchNorm to InstanceNorm. (It seemed more natural. But this may have affected the model's performance in a negative way.) 
+
+
 ### Basic Usage
 
 To train a model, run *train.py*. <br>
