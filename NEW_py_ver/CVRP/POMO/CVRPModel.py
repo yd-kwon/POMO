@@ -55,7 +55,7 @@ class CVRPModel(nn.Module):
         else:
             encoded_last_node = _get_encoding(self.encoded_nodes, state.current_node)
             # shape: (batch, pomo, embedding)
-            probs = self.decoder(encoded_last_node, ninf_mask=state.ninf_mask)
+            probs = self.decoder(encoded_last_node, state.load, ninf_mask=state.ninf_mask)
             # shape: (batch, pomo, problem+1)
 
             if self.training or self.model_params['eval_type'] == 'softmax':
@@ -141,9 +141,9 @@ class EncoderLayer(nn.Module):
         self.Wv = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
         self.multi_head_combine = nn.Linear(head_num * qkv_dim, embedding_dim)
 
-        self.add_n_normalization_1 = AddAndInstanceNormalization(**model_params)
+        self.add_n_normalization_1 = AddAndBatchNormalization(**model_params)
         self.feed_forward = FeedForward(**model_params)
-        self.add_n_normalization_2 = AddAndInstanceNormalization(**model_params)
+        self.add_n_normalization_2 = AddAndBatchNormalization(**model_params)
 
     def forward(self, input1):
         # input1.shape: (batch, problem+1, embedding)
@@ -182,7 +182,7 @@ class CVRP_Decoder(nn.Module):
 
         # self.Wq_1 = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
         # self.Wq_2 = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
-        self.Wq_last = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
+        self.Wq_last = nn.Linear(embedding_dim+1, head_num * qkv_dim, bias=False)
         self.Wk = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
         self.Wv = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
 
@@ -216,15 +216,19 @@ class CVRP_Decoder(nn.Module):
         self.q2 = reshape_by_heads(self.Wq_2(encoded_q2), head_num=head_num)
         # shape: (batch, head_num, n, qkv_dim)
 
-    def forward(self, encoded_last_node, ninf_mask):
+    def forward(self, encoded_last_node, load, ninf_mask):
         # encoded_last_node.shape: (batch, pomo, embedding)
+        # load.shape: (batch, pomo)
         # ninf_mask.shape: (batch, pomo, problem)
 
         head_num = self.model_params['head_num']
 
         #  Multi-Head Attention
         #######################################################
-        q_last = reshape_by_heads(self.Wq_last(encoded_last_node), head_num=head_num)
+        input_cat = torch.cat((encoded_last_node, load[:, :, None]), dim=2)
+        # shape = (batch, group, EMBEDDING_DIM+1)
+
+        q_last = reshape_by_heads(self.Wq_last(input_cat), head_num=head_num)
         # shape: (batch, head_num, pomo, qkv_dim)
 
         # q = self.q1 + self.q2 + q_last
@@ -338,6 +342,26 @@ class AddAndInstanceNormalization(nn.Module):
 
         return back_trans
 
+
+class AddAndBatchNormalization(nn.Module):
+    def __init__(self, **model_params):
+        super().__init__()
+        embedding_dim = model_params['embedding_dim']
+        self.norm_by_EMB = nn.BatchNorm1d(embedding_dim, affine=True)
+        # 'Funny' Batch_Norm, as it will normalized by EMB dim
+
+    def forward(self, input1, input2):
+        # input.shape: (batch, problem, embedding)
+
+        batch_s = input1.size(0)
+        problem_s = input1.size(1)
+        embedding_dim = input1.size(2)
+
+        added = input1 + input2
+        normalized = self.norm_by_EMB(added.reshape(batch_s * problem_s, embedding_dim))
+        back_trans = normalized.reshape(batch_s, problem_s, embedding_dim)
+
+        return back_trans
 
 class FeedForward(nn.Module):
     def __init__(self, **model_params):

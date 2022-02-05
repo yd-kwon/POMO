@@ -57,6 +57,9 @@ class CVRPTester:
         score_AM = AverageMeter()
         aug_score_AM = AverageMeter()
 
+        if self.tester_params['test_data_load']['enable']:
+            self.env.use_saved_problems(self.tester_params['test_data_load']['filename'], self.device)
+
         test_num_episode = self.tester_params['test_episodes']
         episode = 0
 

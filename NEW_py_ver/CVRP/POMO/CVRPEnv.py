@@ -21,6 +21,8 @@ class Step_State:
     POMO_IDX: torch.Tensor = None
     # shape: (batch, pomo)
     selected_count: int = None
+    load: torch.Tensor = None
+    # shape: (batch, pomo)
     current_node: torch.Tensor = None
     # shape: (batch, pomo)
     ninf_mask: torch.Tensor = None
@@ -37,6 +39,12 @@ class CVRPEnv:
         self.env_params = env_params
         self.problem_size = env_params['problem_size']
         self.pomo_size = env_params['pomo_size']
+
+        self.FLAG__use_saved_problems = False
+        self.saved_depot_xy = None
+        self.saved_node_xy = None
+        self.saved_node_demand = None
+        self.saved_index = None
 
         # Const @Load_Problem
         ####################################
@@ -75,11 +83,25 @@ class CVRPEnv:
         self.reset_state = Reset_State()
         self.step_state = Step_State()
 
+    def use_saved_problems(self, filename, device):
+        self.FLAG__use_saved_problems = True
+
+        loaded_dict = torch.load(filename, map_location=device)
+        self.saved_depot_xy = loaded_dict['depot_xy']
+        self.saved_node_xy = loaded_dict['node_xy']
+        self.saved_node_demand = loaded_dict['node_demand']
+        self.saved_index = 0
 
     def load_problems(self, batch_size, aug_factor=1):
         self.batch_size = batch_size
 
-        depot_xy, node_xy, node_demand = get_random_problems(batch_size, self.problem_size)
+        if not self.FLAG__use_saved_problems:
+            depot_xy, node_xy, node_demand = get_random_problems(batch_size, self.problem_size)
+        else:
+            depot_xy = self.saved_depot_xy[self.saved_index:self.saved_index+batch_size]
+            node_xy = self.saved_node_xy[self.saved_index:self.saved_index+batch_size]
+            node_demand = self.saved_node_demand[self.saved_index:self.saved_index+batch_size]
+            self.saved_index += batch_size
 
         if aug_factor > 1:
             if aug_factor == 8:
@@ -132,6 +154,7 @@ class CVRPEnv:
 
     def pre_step(self):
         self.step_state.selected_count = self.selected_count
+        self.step_state.load = self.load
         self.step_state.current_node = self.current_node
         self.step_state.ninf_mask = self.ninf_mask
         self.step_state.finished = self.finished
@@ -184,6 +207,7 @@ class CVRPEnv:
         self.ninf_mask[:, :, 0][self.finished] = 0
 
         self.step_state.selected_count = self.selected_count
+        self.step_state.load = self.load
         self.step_state.current_node = self.current_node
         self.step_state.ninf_mask = self.ninf_mask
         self.step_state.finished = self.finished
