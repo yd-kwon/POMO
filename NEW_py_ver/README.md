@@ -1,6 +1,3 @@
-# Note: CVRP codes in this "Ney-Py-Version" has a bug, and the model it trains will have worse performance than that of the "Old-Version".
-# Fixed codes will be uploaded in a week or so.
-
 
 # POMO, as .py version
 
