@@ -141,9 +141,9 @@ class EncoderLayer(nn.Module):
         self.Wv = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
         self.multi_head_combine = nn.Linear(head_num * qkv_dim, embedding_dim)
 
-        self.add_n_normalization_1 = AddAndBatchNormalization(**model_params)
+        self.add_n_normalization_1 = AddAndInstanceNormalization(**model_params)
         self.feed_forward = FeedForward(**model_params)
-        self.add_n_normalization_2 = AddAndBatchNormalization(**model_params)
+        self.add_n_normalization_2 = AddAndInstanceNormalization(**model_params)
 
     def forward(self, input1):
         # input1.shape: (batch, problem+1, embedding)
