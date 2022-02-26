@@ -50,8 +50,8 @@ tester_params = {
     'use_cuda': USE_CUDA,
     'cuda_device_num': CUDA_DEVICE_NUM,
     'model_load': {
-        'path': './result/20220204_174250_train_cvrp100_BatchNorm__cont02_lr_decay',  # directory path of pre-trained model and log files saved.
-        'epoch': 10200,  # epoch version of pre-trained model to laod.
+        'path': './result/saved_CVRP100_model',  # directory path of pre-trained model and log files saved.
+        'epoch': 30500,  # epoch version of pre-trained model to laod.
     },
     'test_episodes': 10*1000,
     'test_batch_size': 1000,
@@ -69,7 +69,7 @@ if tester_params['augmentation_enable']:
 
 logger_params = {
     'log_file': {
-        'desc': 'test_cvrp100_BatchNorm_Model_lrdecay',
+        'desc': 'test_cvrp100',
         'filename': 'log.txt'
     }
 }
