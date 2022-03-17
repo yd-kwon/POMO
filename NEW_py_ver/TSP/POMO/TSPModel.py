@@ -39,13 +39,17 @@ class TSPModel(nn.Module):
             # shape: (batch, pomo, problem)
 
             if self.training or self.model_params['eval_type'] == 'softmax':
-                selected = probs.reshape(batch_size * pomo_size, -1).multinomial(1) \
-                    .squeeze(dim=1).reshape(batch_size, pomo_size)
-                # shape: (batch, pomo)
+                while True:
+                    selected = probs.reshape(batch_size * pomo_size, -1).multinomial(1) \
+                        .squeeze(dim=1).reshape(batch_size, pomo_size)
+                    # shape: (batch, pomo)
 
-                prob = probs[state.BATCH_IDX, state.POMO_IDX, selected] \
-                    .reshape(batch_size, pomo_size)
-                # shape: (batch, pomo)
+                    prob = probs[state.BATCH_IDX, state.POMO_IDX, selected] \
+                        .reshape(batch_size, pomo_size)
+                    # shape: (batch, pomo)
+
+                    if (prob != 0).all():
+                        break
 
             else:
                 selected = probs.argmax(dim=2)
