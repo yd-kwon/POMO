@@ -1,5 +1,8 @@
 # POMO
 
+### Notes from jkschin
+- To produce the greedy results, just run `python infer.py`.
+
 ### Files in "OLD_ipynb_ver" folders 
 
 They are the original codes (2020) used for the paper<br>

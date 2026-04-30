@@ -180,21 +180,42 @@ def run_greedy_inference(
 # CLI
 # ---------------------------------------------------------------------------
 
+def format_time(seconds):
+    if seconds < 60:
+        val = seconds
+        unit = 's'
+    elif seconds < 3600:
+        val = seconds / 60
+        unit = 'm'
+    else:
+        val = seconds / 3600
+        unit = 'h'
+    
+    if val >= 9.5:
+        return f"{int(round(val))}{unit}"
+    else:
+        rounded = round(val, 1)
+        if rounded.is_integer():
+            return f"{int(rounded)}{unit}"
+        else:
+            return f"{rounded}{unit}"
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="POMO greedy inference on LEHD-format CVRP test files"
     )
     parser.add_argument(
-        "--test-file", required=True,
-        help="Path to the LEHD text file, e.g. vrp100_test_lkh.txt"
+        "--test-file-dir", default="/home/jkschin/orcd/pool/CVRP/testing dataset",
+        help="Path to the directory containing LEHD text files"
     )
     parser.add_argument(
-        "--model-path", required=True,
+        "--model-path", default="NEW_py_ver/CVRP/POMO/result/saved_CVRP100_model/checkpoint-30500.pt",
         help="Path to a POMO checkpoint (.pt file)"
     )
     parser.add_argument(
-        "--problem-size", type=int, required=True,
-        help="Number of customer nodes (e.g. 100, 200, 500, 1000)"
+        "--problem-sizes", type=int, nargs="+", default=[100, 200, 500, 1000],
+        help="List of problem sizes to evaluate"
     )
     parser.add_argument(
         "--pomo-size", type=int, default=1,
@@ -230,11 +251,12 @@ def main():
     args = parse_args()
 
     pomo_size = args.pomo_size  # default 1 = single trajectory
-
-    # single-trajectory, no augmentation (as per the POMO paper "no augment" row)
     augmentation_enable = False   # no 8× coordinate augmentation
     aug_factor = 1 if not augmentation_enable else 8
     assert aug_factor == 1, "augmentation must be disabled for pure greedy inference"
+    assert pomo_size == 1, (
+        f"pomo_size={pomo_size}; use --pomo-size 1 for single-trajectory mode"
+    )
 
     # ---- device ----
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -247,28 +269,10 @@ def main():
         torch.set_default_tensor_type("torch.FloatTensor")
 
     print(f"Device       : {device}")
-    print(f"Test file    : {args.test_file}")
     print(f"Model        : {args.model_path}")
-    print(f"Problem size : {args.problem_size}  |  POMO size: {pomo_size}  |  augmentation: {augmentation_enable}")
+    print(f"POMO size    : {pomo_size}  |  augmentation: {augmentation_enable}")
 
-    # ---- load data ----
-    print("\nLoading test instances …", flush=True)
-    t0 = time.time()
-    depot_xy, node_xy, node_demand, lkh_costs = load_lehd_file(
-        args.test_file, max_samples=args.max_samples
-    )
-    N = depot_xy.size(0)
-    actual_problem_size = node_xy.size(1)
-    print(f"  Loaded {N} instances  (customers per instance: {actual_problem_size})  [{time.time()-t0:.1f}s]")
-
-    if actual_problem_size != args.problem_size:
-        print(
-            f"WARNING: --problem-size {args.problem_size} does not match "
-            f"actual data size {actual_problem_size}. Using {actual_problem_size}."
-        )
-        args.problem_size = actual_problem_size
-
-    # ---- build model ----
+    # ---- build model (once for all problem sizes) ----
     model_params = {
         "embedding_dim":     args.embedding_dim,
         "sqrt_embedding_dim": args.embedding_dim ** 0.5,
@@ -280,46 +284,68 @@ def main():
         "eval_type":         "argmax",   # greedy (argmax, not sampling)
     }
 
-    assert aug_factor == 1, "augmentation must be disabled for pure greedy inference"
-    assert pomo_size == 1, (
-        f"pomo_size={pomo_size}; use --pomo-size 1 for single-trajectory mode"
-    )
-    env_params = {
-        "problem_size": args.problem_size,
-        "pomo_size":    pomo_size,
-    }
-
-    env   = CVRPEnv(**env_params)
     model = CVRPModel(**model_params)
-
     checkpoint = torch.load(args.model_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)
-
     print(f"  Model loaded from {args.model_path}")
 
-    # ---- inference ----
-    print(f"\nRunning single-trajectory greedy inference …", flush=True)
-    t1 = time.time()
-    tour_lengths = run_greedy_inference(
-        depot_xy, node_xy, node_demand,
-        model, env,
-        batch_size=args.batch_size,
-        device=device,
-    )
-    elapsed = time.time() - t1
+    results = []
 
-    # ---- results ----
-    avg_pomo   = tour_lengths.mean().item()
-    avg_lkh    = lkh_costs.mean().item()
-    gap_pct    = (avg_pomo - avg_lkh) / avg_lkh * 100.0
+    for sz in args.problem_sizes:
+        test_file = f"{args.test_file_dir}/vrp{sz}_test_lkh.txt"
+        print(f"\n{'='*55}")
+        print(f"Evaluating Problem Size: {sz}")
+        print(f"Test file    : {test_file}")
 
+        # ---- load data ----
+        t0 = time.time()
+        depot_xy, node_xy, node_demand, lkh_costs = load_lehd_file(
+            test_file, max_samples=args.max_samples
+        )
+        N = depot_xy.size(0)
+        actual_problem_size = node_xy.size(1)
+        print(f"  Loaded {N} instances  (customers per instance: {actual_problem_size})  [{time.time()-t0:.1f}s]")
+
+        # ---- setup env for this size ----
+        env_params = {
+            "problem_size": actual_problem_size,
+            "pomo_size":    pomo_size,
+        }
+        env = CVRPEnv(**env_params)
+
+        # ---- inference ----
+        t1 = time.time()
+        tour_lengths = run_greedy_inference(
+            depot_xy, node_xy, node_demand,
+            model, env,
+            batch_size=args.batch_size,
+            device=device,
+        )
+        elapsed = time.time() - t1
+
+        # ---- results ----
+        avg_pomo   = tour_lengths.mean().item()
+        avg_lkh    = lkh_costs.mean().item()
+        gap_pct    = (avg_pomo - avg_lkh) / avg_lkh * 100.0
+
+        print(f"  Inference time : {elapsed:.2f}s  ({elapsed/N*1000:.1f} ms/instance)")
+        print(f"  Avg greedy cost : {avg_pomo:.4f}")
+        print(f"  Avg LKH  cost  : {avg_lkh:.4f}")
+        print(f"  Gap vs LKH     : {gap_pct:+.2f}%")
+        
+        results.append((gap_pct, elapsed))
+
+    # ---- format final latex output ----
     print(f"\n{'='*55}")
-    print(f"  Instances      : {N}")
-    print(f"  Inference time : {elapsed:.2f}s  ({elapsed/N*1000:.1f} ms/instance)")
-    print(f"  Avg greedy cost : {avg_pomo:.4f}")
-    print(f"  Avg LKH  cost  : {avg_lkh:.4f}")
-    print(f"  Gap vs LKH     : {gap_pct:+.2f}%")
+    latex_parts = ["\\multicolumn{2}{l|}{POMO greedy}"]
+    for gap, el in results:
+        latex_parts.append(f"{gap:.3f}\\%")
+        latex_parts.append(format_time(el))
+    
+    latex_line = " & ".join(latex_parts) + " \\\\"
+    print("Final LaTeX Output:")
+    print(latex_line)
     print(f"{'='*55}")
 
 
