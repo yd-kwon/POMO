@@ -254,6 +254,9 @@ def main():
         args.problem_size = actual_problem_size
 
     # ---- build model ----
+    augmentation_enable = False   # pure greedy — no 8× coordinate augmentation
+    aug_factor = 1 if not augmentation_enable else 8
+
     model_params = {
         "embedding_dim":     args.embedding_dim,
         "sqrt_embedding_dim": args.embedding_dim ** 0.5,
@@ -262,8 +265,10 @@ def main():
         "head_num":          args.head_num,
         "logit_clipping":    args.logit_clipping,
         "ff_hidden_dim":     args.ff_hidden_dim,
-        "eval_type":         "argmax",   # greedy
+        "eval_type":         "argmax",   # greedy (argmax, not sampling)
     }
+
+    assert aug_factor == 1, "augmentation must be disabled for pure greedy inference"
     env_params = {
         "problem_size": args.problem_size,
         "pomo_size":    pomo_size,
