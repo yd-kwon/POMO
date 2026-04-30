@@ -1,5 +1,10 @@
 """
-Standalone POMO greedy inference script for LEHD-format CVRP test files.
+Standalone POMO single-trajectory greedy inference script for LEHD-format CVRP test files.
+
+Runs in "single trajectory, no augment" mode as reported in the POMO paper:
+  - pomo_size = 1  (one greedy rollout from the depot; no POMO multi-start fan-out)
+  - augmentation_enable = False  (no 8× coordinate augmentation)
+  - eval_type = argmax  (deterministic greedy, not sampling)
 
 Usage examples:
   python infer.py --test-file "/home/jkschin/orcd/pool/CVRP/testing dataset/vrp100_test_lkh.txt" \
@@ -8,7 +13,7 @@ Usage examples:
 
   python infer.py --test-file "/home/jkschin/orcd/pool/CVRP/testing dataset/vrp200_test_lkh.txt" \
       --model-path /path/to/cvrp200_checkpoint.pt \
-      --problem-size 200 --pomo-size 50 --batch-size 32
+      --problem-size 200 --batch-size 32
 
   # Use CPU explicitly:
   python infer.py --test-file ... --model-path ... --problem-size 100 --no-cuda
@@ -121,8 +126,13 @@ def run_greedy_inference(
     device:      torch.device,
 ) -> torch.Tensor:
     """
-    Run POMO greedy rollout and return per-instance best tour length (N,).
+    Run a single-trajectory greedy rollout and return per-instance tour length (N,).
+
+    pomo_size must be 1 (single trajectory, no POMO multi-start fan-out).
     """
+    assert env.pomo_size == 1, (
+        f"pomo_size={env.pomo_size}; set pomo_size=1 for single-trajectory mode"
+    )
     N = depot_xy.size(0)
     all_lengths = []
 
@@ -159,9 +169,9 @@ def run_greedy_inference(
                 selected, _ = model(state)
                 state, reward, done = env.step(selected)
 
-            # reward shape: (batch, pomo)  — negative tour length
-            best_lengths, _ = (-reward).min(dim=1)   # best (shortest) among pomo starts
-            all_lengths.append(best_lengths.cpu())
+            # reward shape: (batch, pomo=1)  — negative tour length
+            tour_lengths = (-reward).squeeze(dim=1)   # single trajectory: (batch,)
+            all_lengths.append(tour_lengths.cpu())
 
     return torch.cat(all_lengths, dim=0)  # (N,)
 
@@ -187,8 +197,8 @@ def parse_args():
         help="Number of customer nodes (e.g. 100, 200, 500, 1000)"
     )
     parser.add_argument(
-        "--pomo-size", type=int, default=None,
-        help="POMO rollout width (defaults to --problem-size; reduce for large instances)"
+        "--pomo-size", type=int, default=1,
+        help="POMO rollout width (default: 1 = single trajectory, no multi-start fan-out)"
     )
     parser.add_argument(
         "--batch-size", type=int, default=100,
@@ -219,7 +229,12 @@ def parse_args():
 def main():
     args = parse_args()
 
-    pomo_size = args.pomo_size if args.pomo_size is not None else args.problem_size
+    pomo_size = args.pomo_size  # default 1 = single trajectory
+
+    # single-trajectory, no augmentation (as per the POMO paper "no augment" row)
+    augmentation_enable = False   # no 8× coordinate augmentation
+    aug_factor = 1 if not augmentation_enable else 8
+    assert aug_factor == 1, "augmentation must be disabled for pure greedy inference"
 
     # ---- device ----
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -234,7 +249,7 @@ def main():
     print(f"Device       : {device}")
     print(f"Test file    : {args.test_file}")
     print(f"Model        : {args.model_path}")
-    print(f"Problem size : {args.problem_size}  |  POMO size: {pomo_size}")
+    print(f"Problem size : {args.problem_size}  |  POMO size: {pomo_size}  |  augmentation: {augmentation_enable}")
 
     # ---- load data ----
     print("\nLoading test instances …", flush=True)
@@ -254,9 +269,6 @@ def main():
         args.problem_size = actual_problem_size
 
     # ---- build model ----
-    augmentation_enable = False   # pure greedy — no 8× coordinate augmentation
-    aug_factor = 1 if not augmentation_enable else 8
-
     model_params = {
         "embedding_dim":     args.embedding_dim,
         "sqrt_embedding_dim": args.embedding_dim ** 0.5,
@@ -269,6 +281,9 @@ def main():
     }
 
     assert aug_factor == 1, "augmentation must be disabled for pure greedy inference"
+    assert pomo_size == 1, (
+        f"pomo_size={pomo_size}; use --pomo-size 1 for single-trajectory mode"
+    )
     env_params = {
         "problem_size": args.problem_size,
         "pomo_size":    pomo_size,
@@ -284,7 +299,7 @@ def main():
     print(f"  Model loaded from {args.model_path}")
 
     # ---- inference ----
-    print("\nRunning greedy inference …", flush=True)
+    print(f"\nRunning single-trajectory greedy inference …", flush=True)
     t1 = time.time()
     tour_lengths = run_greedy_inference(
         depot_xy, node_xy, node_demand,
@@ -302,7 +317,7 @@ def main():
     print(f"\n{'='*55}")
     print(f"  Instances      : {N}")
     print(f"  Inference time : {elapsed:.2f}s  ({elapsed/N*1000:.1f} ms/instance)")
-    print(f"  Avg POMO cost  : {avg_pomo:.4f}")
+    print(f"  Avg greedy cost : {avg_pomo:.4f}")
     print(f"  Avg LKH  cost  : {avg_lkh:.4f}")
     print(f"  Gap vs LKH     : {gap_pct:+.2f}%")
     print(f"{'='*55}")
